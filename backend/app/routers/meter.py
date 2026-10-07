@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.actions import build_result, read_action
 from app.schemas import ActionResult, EntryPayload, PageResult
 from app.services.meter import MeterService
 
@@ -50,12 +51,14 @@ def create_entry(payload: EntryPayload) -> ActionResult:
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条关口表计执行确认正常、标记异常、停用表计；不允许的动作会被拦下并说明原因。"""
-    action = str(payload.values.get("action") or "").strip()
+    """对单条关口表计执行确认正常、标记异常、停用表计；不允许的动作会被拦下并说明原因。
+
+    请求体与回执由公共动作链路统一生成：兼容 ``{"action": ...}`` 与
+    ``{"values": {"action": ...}}`` 两种历史请求体，成功失败口径全模块一致。
+    """
+    action, remark = read_action(payload.as_body())
     entry, message = service.run_action(entry_id, action)
-    if entry is None:
-        return ActionResult(ok=False, message=message)
-    return ActionResult(ok=True, message=message, entry=entry)
+    return build_result(action=action, remark=remark, entry=entry, message=message)
 
 
 @router.get("/export")

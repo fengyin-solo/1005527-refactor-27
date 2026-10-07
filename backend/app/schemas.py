@@ -16,16 +16,33 @@ class PageResult(BaseModel, Generic[T]):
 
 
 class ActionResult(BaseModel):
+    """动作回执：执行是否成功、给用户的提示语，以及执行后的记录快照。
+
+    ``action`` 回填本次实际执行的动作名，``remark`` 透传请求里的备注，
+    方便列表与详情两处读到同一份回执；历史字段 ``ok/message/entry`` 保持不变。
+    """
+
     ok: bool
     message: str
     entry: dict[str, Any] | None = None
+    action: str | None = None
+    remark: str | None = None
 
 
 class EntryPayload(BaseModel):
-    """登记或修改一条业务记录时提交的字段集合。"""
+    """登记或修改一条业务记录时提交的字段集合。
+
+    历史上动作按钮直接平铺 ``{"action": "..."}`` 调用动作接口，这个字段保留在
+    模型顶层做兼容；新调用方仍可使用 ``values`` 包裹。
+    """
 
     values: dict[str, Any] = Field(default_factory=dict)
     remark: str | None = None
+    action: str | None = None
+
+    def as_body(self) -> dict[str, Any]:
+        """还原成公共动作链路读取的原始请求体结构。"""
+        return {"values": self.values, "remark": self.remark, "action": self.action}
 
 
 

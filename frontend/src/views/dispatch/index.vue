@@ -18,7 +18,7 @@
       </article>
     </div>
 
-    <form class="filter-bar" @submit.prevent="reload">
+    <form class="filter-bar" @submit.prevent="reload()">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
         <input v-model="filters[field]" :placeholder="`按${field}检索`" />
@@ -36,14 +36,22 @@
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
-          <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td v-for="(column, columnIndex) in columns" :key="column">
+            <button
+              v-if="columnIndex === 0"
+              class="cell-link"
+              type="button"
+              @click="openDetail(row)"
+            >{{ row[column] ?? '—' }}</button>
+            <template v-else>{{ row[column] ?? '—' }}</template>
+          </td>
           <td class="row-actions">
             <button
               v-for="action in actions"
               :key="action"
               class="link"
               type="button"
-              @click="runAction(action, row)"
+              @click="executeAction(action, row)"
             >
               {{ action }}
             </button>
@@ -57,15 +65,28 @@
 
     <footer class="page-foot">
       <span>共 {{ total }} 条调度指令记录</span>
-      <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
+      <span v-if="listError" class="error-text">{{ listError }}</span>
+      <ReceiptNotice v-else :receipt="receipt" />
     </footer>
+
+    <DetailDrawer
+      :row="detailRow"
+      :columns="columns"
+      :actions="actions"
+      :receipt="receipt"
+      @close="closeDetail"
+      @run="(action: string) => detailRow && executeAction(action, detailRow)"
+    />
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 
-import { request } from '@/api/client'
+import DetailDrawer from '@/components/DetailDrawer.vue'
+import ReceiptNotice from '@/components/ReceiptNotice.vue'
+import { useModulePage } from '@/composables/useModulePage'
+import { publishHint } from '@/stores/receipt'
 
 type Row = Record<string, string | number | null>
 
@@ -74,57 +95,36 @@ const columns = ["指令编号", "下发单位", "指令类型", "下发时间",
 const actions = ["确认执行", "完成回复", "驳回指令"]
 const statuses = ["待执行", "执行中", "已完成", "已驳回"]
 const stats = [{"label": "待执行指令", "value": 0}, {"label": "今日完成数", "value": 0}, {"label": "驳回指令数", "value": 0}]
-
-const rows = ref<Row[]>([])
-const total = ref(0)
-const errorMessage = ref('')
-const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 
-function resetFilters() {
-  filters.value = {}
-  void reload()
-}
+const {
+  rows,
+  total,
+  filters,
+  listError,
+  receipt,
+  detailRow,
+  reload,
+  resetFilters,
+  openDetail,
+  closeDetail,
+  executeAction,
+} = useModulePage({
+  endpoint: ENDPOINT,
+  listReadFailure: '调度指令单列表读取失败',
+  listCatchFailure: '调度指令列表读取失败',
+  actionFailure: '调度指令动作未生效，请稍后重试',
+})
 
 function exportRows() {
   window.open(`${ENDPOINT}/export`, '_blank')
 }
 
 function openCreate() {
-  errorMessage.value = '调度指令单登记入口尚未接入审批流'
+  // 登记入口未接入审批流时的提示沿用历史文案；它不是动作接口，提示也落到
+  // 与列表/详情同一份回执数据源。
+  publishHint(ENDPOINT, '调度指令单登记入口尚未接入审批流')
 }
 
-async function runAction(action: string, row: Row) {
-  errorMessage.value = ''
-  try {
-    const response = await request(`${ENDPOINT}/${row.id}/actions`, {
-      method: 'POST',
-      body: JSON.stringify({ action }),
-    })
-    if (!response.ok) {
-      throw new Error('调度指令动作未生效，请稍后重试')
-    }
-    await reload()
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '调度指令操作失败'
-  }
-}
-
-async function reload() {
-  errorMessage.value = ''
-  const query = new URLSearchParams(filters.value as Record<string, string>).toString()
-  try {
-    const response = await request(`${ENDPOINT}?${query}`)
-    if (!response.ok) {
-      throw new Error('调度指令单列表读取失败')
-    }
-    const payload = await response.json()
-    rows.value = payload.items ?? []
-    total.value = payload.total ?? rows.value.length
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '调度指令列表读取失败'
-  }
-}
-
-onMounted(reload)
+onMounted(() => reload())
 </script>
