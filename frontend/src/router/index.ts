@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import Dashboard from '@/views/Dashboard.vue'
+import ModuleDetail from '@/views/ModuleDetail.vue'
 const PvArray = () => import('@/views/pv_array/index.vue')
 const Inverter = () => import('@/views/inverter/index.vue')
 const CombinerBox = () => import('@/views/combiner_box/index.vue')
@@ -42,6 +43,8 @@ const router = createRouter({
     { path: '/safety', name: 'safety', component: Safety },
     { path: '/contract', name: 'contract', component: Contract },
     { path: '/report', name: 'report', component: Report },
+    // 通用详情：与列表共用模块配置与动作回执，列表第一列编号链接进入
+    { path: '/module/:module/:id', name: 'module-detail', component: ModuleDetail },
   ],
 })
 
